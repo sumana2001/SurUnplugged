@@ -1,0 +1,4 @@
+"""API package for SurUnplugged."""
+from api.routes import api_bp
+
+__all__ = ["api_bp"]

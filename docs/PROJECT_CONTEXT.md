@@ -14,20 +14,60 @@
 | **Purpose** | Acoustic guitar backing generator with pitch control |
 | **Target User** | Amateur singers (personal use, shared free) |
 | **Tech Stack** | Flask (Python) + React (Vite) + Tailwind |
-| **Status** | 🟡 Planning Complete |
+| **Status** | � Phase 1 - Backend Foundation |
+| **GitHub Repo** | https://github.com/sumana2001/SurUnplugged |
 
 ---
 
 ## 🎯 Current Phase
 
-### Phase: 0 - Environment Setup
-**Status**: Not Started
+### Phase: 1 - Backend Foundation
+**Status**: In Progress
 
-**Next Action**: Verify system dependencies are installed
+**Next Action**: Test audio pipeline output before building frontend
 
 ---
 
 ## 📝 Session Log
+
+### Session 2: April 27, 2026 - Environment & Backend Setup
+**What we did:**
+- Linked local repo to GitHub remote (https://github.com/sumana2001/SurUnplugged.git)
+- Verified all system dependencies on testing machine:
+  - Python 3.14.3, Node v20.20.0, npm 10.8.2, pip 26.0
+  - FFmpeg 8.1, FluidSynth 2.5.4
+- Created complete backend folder structure
+- Implemented Flask app skeleton with API endpoints
+- Created all service modules (stem_separator, chord_detector, midi_generator, audio_renderer, transpose)
+- Created `test_pipeline.py` for testing audio output BEFORE building frontend
+
+**Files Created:**
+- `backend/app.py` - Flask entry point
+- `backend/config.py` - Configuration settings
+- `backend/requirements.txt` - Python dependencies
+- `backend/api/routes.py` - All API endpoints (/upload, /status, /result, /transpose, /modes)
+- `backend/services/*.py` - All processing services
+- `backend/utils/audio_utils.py` - FFmpeg wrapper utilities
+- `backend/tasks/process_song.py` - Main processing pipeline
+- `backend/test_pipeline.py` - **Test script to validate audio output**
+
+**Developer Notes:**
+- Development happens on main machine, testing/running on separate laptop
+- Code pushed to GitHub, pulled and tested on testing machine
+- Testing machine has package installation restrictions
+- Soundfont file needed - see `backend/assets/soundfonts/README.md`
+- **IMPORTANT**: Test guitar backing output before building frontend
+- May need to adjust: strumming pattern, chord voicings, soundfont, reverb
+
+**Next Steps:**
+1. Push code to GitHub
+2. Pull on testing machine
+3. Install Python dependencies
+4. Download soundfont
+5. Run `python test_pipeline.py <song.mp3> fast` and evaluate output
+6. Decide if audio quality is acceptable or needs adjustment
+
+---
 
 ### Session 1: April 27, 2026 - Project Planning
 **What we did:**
@@ -88,10 +128,12 @@
 ## 🔧 Environment Setup Status
 
 ### System Dependencies
-- [ ] Python 3.10+ 
-- [ ] Node.js 18+
-- [ ] FFmpeg
-- [ ] FluidSynth
+- [x] Python 3.14.3 ✅
+- [x] Node.js v20.20.0 ✅
+- [x] npm 10.8.2 ✅
+- [x] pip 26.0 ✅
+- [x] FFmpeg 8.1 ✅
+- [x] FluidSynth 2.5.4 ✅
 - [ ] Vamp plugin SDK
 - [ ] Chordino plugin
 
@@ -136,16 +178,34 @@ SurUnplugged/
 │   ├── FEASIBILITY.md        ✅ Created
 │   ├── DEVELOPMENT_PLAN.md   ✅ Created
 │   ├── PROJECT_CONTEXT.md    ✅ Created (this file)
-│   └── ARCHITECTURE.md       🔲 To create
+│   └── ARCHITECTURE.md       ✅ Created
 │
-├── backend/                   🔲 Not started
-│   ├── app.py
-│   ├── config.py
-│   ├── requirements.txt
+├── backend/                   ✅ Created
+│   ├── app.py                ✅ Flask entry point
+│   ├── config.py             ✅ Configuration
+│   ├── requirements.txt      ✅ Dependencies
+│   ├── .gitignore            ✅ Git ignore rules
 │   ├── api/
+│   │   ├── __init__.py       ✅
+│   │   └── routes.py         ✅ All API endpoints
 │   ├── services/
+│   │   ├── __init__.py       ✅
+│   │   ├── stem_separator.py ✅ Demucs wrapper
+│   │   ├── chord_detector.py ✅ Librosa-based detection
+│   │   ├── midi_generator.py ✅ MIDI generation
+│   │   ├── audio_renderer.py ✅ FluidSynth wrapper
+│   │   └── transpose.py      ✅ Pitch transposition
 │   ├── tasks/
-│   └── utils/
+│   │   ├── __init__.py       ✅
+│   │   └── process_song.py   ✅ Processing pipeline
+│   ├── utils/
+│   │   ├── __init__.py       ✅
+│   │   └── audio_utils.py    ✅ FFmpeg utilities
+│   ├── assets/
+│   │   └── soundfonts/
+│   │       └── README.md     ✅ Soundfont setup guide
+│   └── storage/
+│       └── .gitkeep          ✅ Job storage directory
 │
 ├── frontend/                  🔲 Not started
 │   ├── src/
@@ -154,10 +214,7 @@ SurUnplugged/
 │   │   └── api/
 │   └── ...
 │
-├── assets/                    🔲 Not started
-│   └── soundfonts/
-│
-└── storage/                   🔲 Not started (created at runtime)
+└── storage/                   🔲 (created at runtime)
 ```
 
 ---
@@ -226,8 +283,8 @@ Songs to use for testing (across different genres):
 
 | Phase | Planned | Actual | Status |
 |-------|---------|--------|--------|
-| Phase 0: Setup | Day 1 | - | 🔲 Not Started |
-| Phase 1: Backend Foundation | Days 2-4 | - | 🔲 Not Started |
+| Phase 0: Setup | Day 1 | Day 1 | ✅ Complete |
+| Phase 1: Backend Foundation | Days 2-4 | Day 1 | 🟡 In Progress |
 | Phase 2: Audio Pipeline | Days 5-9 | - | 🔲 Not Started |
 | Phase 3: Pitch | Days 10-11 | - | 🔲 Not Started |
 | Phase 4: Frontend | Days 12-16 | - | 🔲 Not Started |
