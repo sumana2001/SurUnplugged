@@ -191,17 +191,41 @@ def run_pipeline(input_file: Path, mode: str = "fast"):
             print_step(2, "Skipping stem separation (fast mode)")
             chord_input = input_wav
         
-        # Step 3: Chord detection
-        print_step(3, "Detecting chords...")
+        # Step 3: Detect tempo from the music
+        print_step(3, "Detecting tempo...")
         
-        from services.chord_detector import detect_chords
+        from services.chord_detector import detect_chords, detect_tempo
+        
+        detected_tempo = detect_tempo(chord_input)
+        print_success(f"Detected tempo: {detected_tempo:.0f} BPM")
+        
+        # Choose style based on tempo
+        # Slow songs (< 90 BPM) like "Tum Hi Ho" get slow_ballad style
+        # Mid-tempo (90-120 BPM) get ballad style
+        # Upbeat (> 120 BPM) get continuous_strum
+        if detected_tempo < 90:
+            auto_style = "slow_ballad"
+            print_info(f"Slow song detected → using 'slow_ballad' style (sparse, sustained)")
+        elif detected_tempo < 120:
+            auto_style = "ballad"
+            print_info(f"Mid-tempo song → using 'ballad' style (bass + chord pattern)")
+        else:
+            auto_style = "continuous_strum"
+            print_info(f"Upbeat song → using 'continuous_strum' style")
+        
+        # Step 4: Chord detection
+        print_step(4, "Detecting chords...")
         
         chords = detect_chords(chord_input)
         
         # Save chords
         chords_file = job_dir / "chords.json"
         with open(chords_file, "w") as f:
-            json.dump(chords, f, indent=2)
+            json.dump({
+                "tempo": detected_tempo,
+                "style": auto_style,
+                "chords": chords
+            }, f, indent=2)
         
         print_success(f"Detected {len(chords)} chord changes")
         
@@ -212,25 +236,26 @@ def run_pipeline(input_file: Path, mode: str = "fast"):
         if len(chords) > 10:
             print(f"    ... and {len(chords) - 10} more")
         
-        # Step 4: Generate MIDI
-        print_step(4, "Generating MIDI backing track with CONTINUOUS strumming...")
+        # Step 5: Generate MIDI
+        print_step(5, "Generating MIDI backing track (humanized)...")
+        print_info(f"Using style='{auto_style}' at tempo={detected_tempo:.0f} BPM")
         
         from services.midi_generator import generate_backing_midi
         
         midi_path = job_dir / "backing.mid"
-        # Use continuous_strum style for proper unplugged feel, pass song duration
+        # Use detected tempo and auto-selected style
         generate_backing_midi(
             chords, 
             midi_path, 
-            style="continuous_strum",  # This gives continuous strumming!
-            tempo=100,                 # Good tempo for ballads
-            total_duration=duration    # Fill to end of song
+            style=auto_style,             # Auto-selected based on tempo!
+            tempo=int(detected_tempo),    # Use actual song tempo!
+            total_duration=duration       # Fill to end of song
         )
         
         print_success(f"MIDI generated: {midi_path.name}")
         
-        # Step 5: Render to audio
-        print_step(5, "Rendering MIDI to audio with FluidSynth...")
+        # Step 6: Render to audio
+        print_step(6, "Rendering MIDI to audio with FluidSynth...")
         
         from services.audio_renderer import render_midi_to_wav, get_soundfont_info
         

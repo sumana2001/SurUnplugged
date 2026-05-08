@@ -1,14 +1,17 @@
 """
-MIDI Generation Service for SurUnplugged - IMPROVED VERSION
+MIDI Generation Service for SurUnplugged - HUMANIZED VERSION
 
 Generates guitar-style MIDI backing tracks with CONTINUOUS strumming,
 like a real acoustic guitarist would play.
 
-Key improvements over basic version:
+Key improvements:
 1. Fills gaps between detected chords (no silence)
-2. Continuous strumming pattern throughout the song
-3. Realistic rhythm patterns
+2. Continuous strumming pattern throughout the song  
+3. Realistic rhythm patterns with humanization
+4. Notes ring naturally with sustain/overlap
+5. Slight timing variations for organic feel
 """
+import random
 from pathlib import Path
 
 
@@ -120,10 +123,11 @@ def generate_backing_midi(
         chords: List of chord objects with time, duration, chord
         output_path: Path to save MIDI file
         style: Guitar style:
-            - "continuous_strum": Steady strumming pattern (default, best for singing)
-            - "ballad": Slower, more gentle pattern
-            - "fingerpick": Arpeggiated pattern
-        tempo: Tempo in BPM (default 100 - good for ballads)
+            - "continuous_strum": Steady down-up strumming (upbeat songs)
+            - "slow_ballad": Sparse, sustained strums for slow romantic songs
+            - "ballad": Bass + chord pattern (mid-tempo)
+            - "fingerpick": Arpeggiated picking pattern
+        tempo: Tempo in BPM (auto-detected from song is best)
         total_duration: Total song duration to fill
         
     Returns:
@@ -167,6 +171,8 @@ def generate_backing_midi(
         
         if style == "continuous_strum":
             _add_continuous_strum(guitar, notes, start_time, duration, beat_duration)
+        elif style == "slow_ballad":
+            _add_slow_ballad_pattern(guitar, notes, start_time, duration, beat_duration)
         elif style == "ballad":
             _add_ballad_pattern(guitar, notes, start_time, duration, beat_duration)
         elif style == "fingerpick":
@@ -183,6 +189,22 @@ def generate_backing_midi(
     return output_path
 
 
+def _humanize_time(time: float, amount: float = 0.02) -> float:
+    """
+    Add slight random timing variation for natural feel.
+    amount: Maximum deviation in seconds (default 20ms)
+    """
+    return time + random.uniform(-amount, amount)
+
+
+def _humanize_velocity(velocity: int, amount: int = 8) -> int:
+    """
+    Add slight random velocity variation for natural dynamics.
+    """
+    varied = velocity + random.randint(-amount, amount)
+    return max(30, min(127, varied))  # Keep in valid MIDI range
+
+
 def _add_continuous_strum(
     instrument, 
     notes: list[int], 
@@ -195,11 +217,18 @@ def _add_continuous_strum(
     
     Pattern: Down-up-down-up strumming, with emphasis on beats 1 and 3.
     This creates a consistent, rhythmic backing that's easy to sing over.
+    
+    Notes now RING OUT with sustain for natural guitar sound.
+    Timing is slightly humanized for organic feel.
     """
     import pretty_midi
     
     # Strum interval: strum every half beat for consistent rhythm
     strum_interval = beat_duration / 2  # Eighth note strumming
+    
+    # Notes ring for longer than the interval (natural guitar sustain)
+    # This creates overlap and a richer sound
+    note_sustain = beat_duration * 1.2  # Ring for more than a full beat
     
     time = start
     strum_count = 0
@@ -211,15 +240,20 @@ def _add_continuous_strum(
         # Emphasize beats 1 and 3 (every 4th strum in 4/4 time)
         is_strong_beat = (strum_count % 4 == 0)
         
+        # Humanize timing (slight random variation)
+        humanized_time = _humanize_time(time, 0.015)
+        humanized_time = max(start, humanized_time)  # Don't go before chord start
+        
         if is_downstroke:
             # Downstroke: play full chord, bass to treble
+            base_velocity = 75 if is_strong_beat else 65
             _add_single_strum(
                 instrument, 
                 notes, 
-                time, 
-                strum_interval * 0.9,
+                humanized_time, 
+                note_sustain,  # Notes ring longer!
                 downstroke=True,
-                velocity=75 if is_strong_beat else 65
+                velocity=_humanize_velocity(base_velocity)
             )
         else:
             # Upstroke: play upper notes only, treble to bass (quieter)
@@ -227,10 +261,10 @@ def _add_continuous_strum(
             _add_single_strum(
                 instrument, 
                 upper_notes, 
-                time, 
-                strum_interval * 0.7,
+                humanized_time, 
+                note_sustain * 0.8,  # Upstrokes slightly shorter
                 downstroke=False,
-                velocity=50
+                velocity=_humanize_velocity(50, 5)
             )
         
         time += strum_interval
@@ -247,6 +281,7 @@ def _add_ballad_pattern(
     """
     Slower, more gentle pattern for ballads.
     Pattern: bass note, then chord, then bass note, then partial chord.
+    With humanization and natural note sustain.
     """
     import pretty_midi
     
@@ -261,50 +296,105 @@ def _add_ballad_pattern(
     # Pattern repeats every 2 beats
     pattern_duration = beat_duration * 2
     
+    # Notes ring much longer for ballad style
+    sustain = beat_duration * 2.5
+    
     time = start
     
     while time < start + duration - 0.1:
-        # Beat 1: Bass note
+        # Beat 1: Bass note with sustain
         note = pretty_midi.Note(
-            velocity=70,
+            velocity=_humanize_velocity(65),
             pitch=bass,
-            start=time,
-            end=time + beat_duration * 0.8
+            start=_humanize_time(time, 0.02),
+            end=time + sustain  # Let bass ring!
         )
         instrument.notes.append(note)
         
-        # Beat 1.5: Chord (upper notes)
+        # Beat 1.5: Chord (upper notes) with sustain
+        chord_start = time + beat_duration * 0.5
         for i, pitch in enumerate(chord_notes):
             note = pretty_midi.Note(
-                velocity=55,
+                velocity=_humanize_velocity(50, 5),
                 pitch=pitch,
-                start=time + beat_duration * 0.5 + (i * 0.015),
-                end=time + beat_duration * 1.3
+                start=_humanize_time(chord_start + (i * 0.02), 0.015),
+                end=chord_start + sustain  # Let chord ring!
             )
             instrument.notes.append(note)
         
-        # Beat 2: Bass note again
+        # Beat 2: Bass note again (softer)
         if time + beat_duration < start + duration:
             note = pretty_midi.Note(
-                velocity=60,
+                velocity=_humanize_velocity(55),
                 pitch=bass,
-                start=time + beat_duration,
-                end=time + beat_duration * 1.7
+                start=_humanize_time(time + beat_duration, 0.02),
+                end=time + beat_duration + sustain
             )
             instrument.notes.append(note)
         
-        # Beat 2.5: Partial chord
+        # Beat 2.5: Partial chord (very gentle)
         if time + beat_duration * 1.5 < start + duration:
+            partial_start = time + beat_duration * 1.5
             for pitch in chord_notes[:2]:
                 note = pretty_midi.Note(
-                    velocity=45,
+                    velocity=_humanize_velocity(40, 5),
                     pitch=pitch,
-                    start=time + beat_duration * 1.5,
-                    end=time + beat_duration * 1.9
+                    start=_humanize_time(partial_start, 0.015),
+                    end=partial_start + sustain * 0.8
                 )
                 instrument.notes.append(note)
         
         time += pattern_duration
+
+
+def _add_slow_ballad_pattern(
+    instrument, 
+    notes: list[int], 
+    start: float, 
+    duration: float,
+    beat_duration: float
+):
+    """
+    Extra slow, gentle pattern for romantic slow songs like "Tum Hi Ho".
+    
+    Pattern:
+    - Beat 1: Full chord strum (let ring)
+    - Beat 3: Gentle restrike (softer)
+    
+    Notes ring across multiple beats for a dreamy, sustained sound.
+    Very sparse and open - just enough to support vocals.
+    """
+    import pretty_midi
+    
+    sorted_notes = sorted(notes)
+    
+    # Very long sustain - notes ring across 3+ beats
+    sustain = beat_duration * 4  # Ring for a full measure!
+    
+    # Pattern repeats every 2 beats (half a measure in 4/4)
+    pattern_duration = beat_duration * 2
+    
+    time = start
+    is_first_strum = True
+    
+    while time < start + duration - 0.1:
+        # Strum chord with natural timing spread
+        base_velocity = 60 if is_first_strum else 45  # First strum stronger
+        
+        for i, pitch in enumerate(sorted_notes):
+            # Stagger notes slightly (20-30ms between strings)
+            strum_offset = i * random.uniform(0.02, 0.035)
+            
+            note = pretty_midi.Note(
+                velocity=_humanize_velocity(base_velocity - i * 2, 6),
+                pitch=pitch,
+                start=_humanize_time(time + strum_offset, 0.025),
+                end=time + sustain  # Let everything ring!
+            )
+            instrument.notes.append(note)
+        
+        time += pattern_duration
+        is_first_strum = not is_first_strum
 
 
 def _add_fingerpick_pattern(
@@ -317,6 +407,7 @@ def _add_fingerpick_pattern(
     """
     Fingerpicking arpeggio pattern.
     Pattern: bass - middle - high - middle, repeated.
+    With sustain and humanization for natural feel.
     """
     import pretty_midi
     
@@ -337,6 +428,9 @@ def _add_fingerpick_pattern(
     # Each pick is an eighth note
     pick_interval = beat_duration / 2
     
+    # Notes ring longer than pick interval for richness
+    sustain = beat_duration * 2
+    
     time = start
     pick_index = 0
     
@@ -344,13 +438,13 @@ def _add_fingerpick_pattern(
         pitch = pattern[pick_index % len(pattern)]
         
         # Emphasize bass notes
-        velocity = 70 if pick_index % 4 == 0 else 55
+        base_velocity = 65 if pick_index % 4 == 0 else 50
         
         note = pretty_midi.Note(
-            velocity=velocity,
+            velocity=_humanize_velocity(base_velocity),
             pitch=pitch,
-            start=time,
-            end=time + pick_interval * 0.8
+            start=_humanize_time(time, 0.012),
+            end=time + sustain  # Let notes ring!
         )
         instrument.notes.append(note)
         
@@ -400,24 +494,29 @@ if __name__ == "__main__":
         {"time": 12.0, "duration": 4.0, "chord": "G"},
     ]
     
-    print("Testing MIDI generation with continuous strumming...")
+    print("Testing MIDI generation with humanized patterns...")
+    
+    # Test slow ballad (for Tum Hi Ho style songs)
+    output = Path("test_slow_ballad.mid")
+    generate_backing_midi(test_chords, output, style="slow_ballad", tempo=70)
+    print(f"✅ Generated: {output} (slow ballad - for romantic songs)")
     
     # Test continuous strum
-    output = Path("test_continuous.mid")
-    generate_backing_midi(test_chords, output, style="continuous_strum", tempo=100)
-    print(f"✅ Generated: {output} (continuous strumming)")
+    output2 = Path("test_continuous.mid")
+    generate_backing_midi(test_chords, output2, style="continuous_strum", tempo=100)
+    print(f"✅ Generated: {output2} (continuous strumming - upbeat)")
     
     # Test ballad style
-    output2 = Path("test_ballad.mid")
-    generate_backing_midi(test_chords, output2, style="ballad", tempo=80)
-    print(f"✅ Generated: {output2} (ballad style)")
+    output3 = Path("test_ballad.mid")
+    generate_backing_midi(test_chords, output3, style="ballad", tempo=85)
+    print(f"✅ Generated: {output3} (ballad - mid-tempo)")
     
     # Test fingerpick
-    output3 = Path("test_fingerpick.mid")
-    generate_backing_midi(test_chords, output3, style="fingerpick", tempo=90)
-    print(f"✅ Generated: {output3} (fingerpick style)")
+    output4 = Path("test_fingerpick.mid")
+    generate_backing_midi(test_chords, output4, style="fingerpick", tempo=90)
+    print(f"✅ Generated: {output4} (fingerpick style)")
     
-    print("\n🎸 These should all have CONTINUOUS guitar throughout!")
+    print("\n🎸 All patterns now have natural sustain and humanization!")
     print("   No more random silence between notes.")
     
     # Test MIDI generation

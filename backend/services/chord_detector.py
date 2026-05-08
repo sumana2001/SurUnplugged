@@ -42,6 +42,41 @@ CHORD_TEMPLATES = {
 }
 
 
+def detect_tempo(audio_path: Path | str) -> float:
+    """
+    Detect the tempo (BPM) of an audio file using librosa.
+    
+    Args:
+        audio_path: Path to audio file
+        
+    Returns:
+        Detected tempo in BPM (beats per minute)
+    """
+    audio_path = Path(audio_path)
+    
+    if not audio_path.exists():
+        raise FileNotFoundError(f"Audio file not found: {audio_path}")
+    
+    try:
+        import librosa
+    except ImportError:
+        raise RuntimeError("librosa not installed. Install with: pip install librosa")
+    
+    # Load audio
+    y, sr = librosa.load(str(audio_path), sr=22050, mono=True)
+    
+    # Detect tempo
+    tempo, _ = librosa.beat.beat_track(y=y, sr=sr)
+    
+    # librosa returns numpy array, convert to float
+    if hasattr(tempo, '__iter__'):
+        tempo = float(tempo[0])
+    else:
+        tempo = float(tempo)
+    
+    return tempo
+
+
 def detect_chords(
     audio_path: Path | str,
     hop_length: int = 4096,
