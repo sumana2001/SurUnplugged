@@ -91,13 +91,20 @@ def test_dependencies():
     # Check command-line tools
     import subprocess
     
-    for tool in ["ffmpeg", "fluidsynth"]:
+    # ffmpeg uses -version (single dash), fluidsynth uses --version (double dash)
+    cli_tools = [
+        ("ffmpeg", ["-version"]),
+        ("fluidsynth", ["--version"]),
+    ]
+    
+    for tool, args in cli_tools:
         try:
-            result = subprocess.run([tool, "--version"], capture_output=True)
+            result = subprocess.run([tool] + args, capture_output=True)
+            # ffmpeg returns 0 on success
             if result.returncode == 0:
                 print_success(f"{tool} (CLI)")
             else:
-                print_error(f"{tool} (CLI) - not working")
+                print_error(f"{tool} (CLI) - not working (exit code {result.returncode})")
                 missing.append(tool)
         except FileNotFoundError:
             print_error(f"{tool} (CLI) - NOT FOUND")
