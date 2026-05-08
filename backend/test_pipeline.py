@@ -213,12 +213,19 @@ def run_pipeline(input_file: Path, mode: str = "fast"):
             print(f"    ... and {len(chords) - 10} more")
         
         # Step 4: Generate MIDI
-        print_step(4, "Generating MIDI backing track...")
+        print_step(4, "Generating MIDI backing track with CONTINUOUS strumming...")
         
         from services.midi_generator import generate_backing_midi
         
         midi_path = job_dir / "backing.mid"
-        generate_backing_midi(chords, midi_path, style="soft_strum")
+        # Use continuous_strum style for proper unplugged feel, pass song duration
+        generate_backing_midi(
+            chords, 
+            midi_path, 
+            style="continuous_strum",  # This gives continuous strumming!
+            tempo=100,                 # Good tempo for ballads
+            total_duration=duration    # Fill to end of song
+        )
         
         print_success(f"MIDI generated: {midi_path.name}")
         

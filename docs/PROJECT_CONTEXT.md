@@ -30,6 +30,36 @@
 
 ## 📝 Session Log
 
+### Session 3: May 8, 2026 - First Audio Test & Critical Fix
+**What happened:**
+- Tested pipeline with "Tum Hi Ho" MP3
+- **Problem discovered**: Guitar backing had random silence between notes!
+  - Only one strum per chord, then silence
+  - Not continuous like real unplugged guitar
+
+**Root cause:**
+- Original MIDI generator only played one strum at start of each chord
+- Real acoustic guitar strums CONTINUOUSLY throughout
+
+**Fix applied:**
+- Completely rewrote `midi_generator.py` with:
+  1. `fill_chord_gaps()` - extends chords to fill silent sections
+  2. `continuous_strum` style - strums every half-beat (down-up pattern)
+  3. Proper down/up stroke simulation with velocity variation
+  4. Three styles available: `continuous_strum`, `ballad`, `fingerpick`
+
+**Testing notes:**
+- Good test songs (Hindi): Tum Hi Ho, Kabira, Khairiyat
+- Use `fast` mode first for quick testing
+
+**Next Steps:**
+1. Push updated code
+2. Re-test with Tum Hi Ho
+3. Listen if continuous strumming sounds better
+4. May need to adjust tempo (currently 100 BPM) or try different styles
+
+---
+
 ### Session 2: April 27, 2026 - Environment & Backend Setup
 **What we did:**
 - Linked local repo to GitHub remote (https://github.com/sumana2001/SurUnplugged.git)
