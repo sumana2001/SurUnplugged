@@ -310,7 +310,13 @@ def test_transpose(job_dir: Path):
         return
     
     with open(chords_file) as f:
-        chords = json.load(f)
+        data = json.load(f)
+    
+    # Handle both old format (list) and new format (dict with 'chords' key)
+    if isinstance(data, dict) and 'chords' in data:
+        chords = data['chords']
+    else:
+        chords = data
     
     from services.transpose import transpose_progression
     

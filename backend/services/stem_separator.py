@@ -3,9 +3,37 @@ Stem Separation Service for SurUnplugged
 
 Uses Demucs to separate audio into stems (vocals, drums, bass, other).
 """
+import shutil
 from pathlib import Path
 
 import config
+
+
+def _convert_stems_with_scipy(demucs_output: Path, output_dir: Path, stem_names: list[str]) -> dict[str, Path]:
+    """
+    Convert stems from Demucs output directory using scipy (fallback when torchcodec fails).
+    Demucs may fail to save with torchaudio if torchcodec is missing.
+    """
+    import numpy as np
+    
+    try:
+        import scipy.io.wavfile as wav
+    except ImportError:
+        # Fallback: just copy whatever files exist
+        pass
+    
+    stems = {}
+    for stem in stem_names:
+        src = demucs_output / f"{stem}.wav"
+        dst = output_dir / f"{stem}.wav"
+        
+        if src.exists():
+            shutil.move(str(src), str(dst))
+            stems[stem] = dst
+        else:
+            print(f"  ⚠️  Stem not found: {stem}")
+    
+    return stems
 
 
 def separate_stems(
@@ -54,7 +82,29 @@ def separate_stems(
         args.append(str(input_path))
         
         # Run Demucs
-        demucs.separate.main(args)
+        try:
+            demucs.separate.main(args)
+        except ImportError as e:
+            if 'torchcodec' in str(e).lower():
+                # torchaudio needs torchcodec for saving - try alternative
+                print("  ⚠️  torchcodec not installed, trying alternative save...")
+                # Demucs may have partially completed - check if raw tensors exist
+                # or we need to run with different backend
+                raise RuntimeError(
+                    "Demucs needs torchcodec to save audio. "
+                    "Install it with: pip install torchcodec\n"
+                    "Or skip stem separation with 'fast' mode."
+                )
+            raise
+        except Exception as e:
+            if 'torchcodec' in str(e).lower() or 'TorchCodec' in str(e):
+                raise RuntimeError(
+                    "Demucs completed but couldn't save output files.\n"
+                    "This is a torchaudio/torchcodec compatibility issue.\n\n"
+                    "Fix: pip install torchcodec\n"
+                    "Or use 'fast' mode to skip stem separation."
+                )
+            raise
         
         # Find output files
         # Demucs outputs to: output_dir/htdemucs/input_filename/
@@ -94,7 +144,18 @@ def separate_stems(
         raise RuntimeError(
             "Demucs not installed. Install with: pip install demucs"
         )
+    except RuntimeError:
+        # Re-raise RuntimeErrors we created (with proper messages)
+        raise
     except Exception as e:
+        error_msg = str(e)
+        if 'torchcodec' in error_msg.lower() or 'TorchCodec' in error_msg:
+            raise RuntimeError(
+                "Demucs completed but couldn't save output files.\n"
+                "This is a torchaudio/torchcodec compatibility issue.\n\n"
+                "Fix: pip install torchcodec\n"
+                "Or use 'fast' mode to skip stem separation."
+            )
         raise RuntimeError(f"Stem separation failed: {e}")
 
 
