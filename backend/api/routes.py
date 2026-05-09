@@ -286,7 +286,7 @@ def transpose():
 
 @api_bp.route("/modes", methods=["GET"])
 def get_modes():
-    """Get available processing modes."""
+    """Get available processing modes (legacy - use /strategies instead)."""
     return jsonify({
         "modes": {
             name: {
@@ -297,3 +297,223 @@ def get_modes():
         },
         "default": config.DEFAULT_MODE
     })
+
+
+@api_bp.route("/strategies", methods=["GET"])
+def get_strategies():
+    """
+    Get available backing track strategies.
+    
+    Returns list of strategies with descriptions:
+    - A (other_only): Best for acoustic songs - uses real guitar from stems
+    - B (instrumental): Full karaoke - drums + bass + other
+    - C (acoustic_mix): Other + light bass - clean unplugged feel
+    - D (midi_generated): AI-generated from chords - fallback option
+    """
+    from services.stem_mixer import list_strategies
+    
+    strategies = list_strategies()
+    
+    return jsonify({
+        "strategies": strategies,
+        "default": "A",
+        "recommended": "A",
+        "note": "Strategy A (other_only) works best for acoustic/unplugged style songs"
+    })
+
+
+@api_bp.route("/process", methods=["POST"])
+def process_track():
+    """
+    Process a track with specified strategy, pitch, and speed.
+    
+    This is the main processing endpoint that supports all 4 strategies.
+    
+    JSON body:
+        - job_id: Existing job ID (optional if uploading new file)
+        - strategy: A/B/C/D (default: A)
+        - pitch_shift: Semitones to shift (-12 to +12, default: 0)
+        - speed_factor: Speed multiplier (0.5 to 2.0, default: 1.0)
+    
+    Or form data with file upload:
+        - file: Audio file
+        - strategy: A/B/C/D
+        - pitch_shift: Semitones
+        - speed_factor: Speed multiplier
+    """
+    # Handle both JSON and form data
+    if request.is_json:
+        data = request.get_json()
+        job_id = data.get("job_id")
+        strategy = data.get("strategy", "A")
+        pitch_shift = data.get("pitch_shift", 0)
+        speed_factor = data.get("speed_factor", 1.0)
+    else:
+        job_id = request.form.get("job_id")
+        strategy = request.form.get("strategy", "A")
+        pitch_shift = int(request.form.get("pitch_shift", 0))
+        speed_factor = float(request.form.get("speed_factor", 1.0))
+    
+    # Validate strategy
+    valid_strategies = ["A", "B", "C", "D", "other_only", "instrumental", "acoustic_mix", "midi_generated"]
+    if strategy.upper() not in [s.upper() for s in valid_strategies]:
+        return jsonify({"error": f"Invalid strategy. Valid: A, B, C, D"}), 400
+    
+    # Validate pitch
+    try:
+        pitch_shift = int(pitch_shift)
+        if not -12 <= pitch_shift <= 12:
+            return jsonify({"error": "pitch_shift must be between -12 and 12"}), 400
+    except (TypeError, ValueError):
+        return jsonify({"error": "pitch_shift must be an integer"}), 400
+    
+    # Validate speed
+    try:
+        speed_factor = float(speed_factor)
+        if not 0.5 <= speed_factor <= 2.0:
+            return jsonify({"error": "speed_factor must be between 0.5 and 2.0"}), 400
+    except (TypeError, ValueError):
+        return jsonify({"error": "speed_factor must be a number"}), 400
+    
+    # If job_id provided, reprocess existing stems
+    if job_id:
+        job_dir = config.JOBS_DIR / job_id
+        if not job_dir.exists():
+            return jsonify({"error": "Job not found"}), 404
+        
+        # Check if stems exist (for strategies A/B/C)
+        strategy_upper = strategy.upper() if len(strategy) == 1 else strategy
+        
+        if strategy_upper in ["A", "B", "C", "other_only", "instrumental", "acoustic_mix"]:
+            other_wav = job_dir / "other.wav"
+            if not other_wav.exists():
+                return jsonify({
+                    "error": "Stems not found. Run with strategy D or re-upload file.",
+                    "suggestion": "Use strategy D (MIDI) or re-run stem separation"
+                }), 400
+        
+        # TODO: Queue reprocessing job
+        # For now, return info about what would be done
+        
+        return jsonify({
+            "job_id": job_id,
+            "status": "queued",
+            "strategy": strategy,
+            "pitch_shift": pitch_shift,
+            "speed_factor": speed_factor,
+            "message": "Reprocessing queued. Full implementation coming with frontend."
+        }), 202
+    
+    # No job_id - need file upload
+    if "file" not in request.files:
+        return jsonify({"error": "Either job_id or file upload required"}), 400
+    
+    # Handle file upload (similar to /upload endpoint)
+    file = request.files["file"]
+    
+    if file.filename == "":
+        return jsonify({"error": "No file selected"}), 400
+    
+    file_ext = Path(file.filename).suffix.lower()
+    if file_ext not in config.ALLOWED_EXTENSIONS:
+        return jsonify({
+            "error": f"Invalid file type. Allowed: {', '.join(config.ALLOWED_EXTENSIONS)}"
+        }), 400
+    
+    # Generate job ID
+    job_id = str(uuid.uuid4())[:8]
+    job_dir = config.JOBS_DIR / job_id
+    job_dir.mkdir(exist_ok=True)
+    
+    # Save file
+    original_path = job_dir / f"original{file_ext}"
+    file.save(original_path)
+    
+    # Create job record
+    jobs[job_id] = {
+        "id": job_id,
+        "status": "queued",
+        "strategy": strategy,
+        "pitch_shift": pitch_shift,
+        "speed_factor": speed_factor,
+        "progress": 0,
+        "current_step": "queued",
+        "error": None,
+    }
+    
+    with open(job_dir / "job.json", "w") as f:
+        json.dump(jobs[job_id], f, indent=2)
+    
+    # TODO: Queue processing job
+    
+    return jsonify({
+        "job_id": job_id,
+        "status": "queued",
+        "strategy": strategy,
+        "pitch_shift": pitch_shift,
+        "speed_factor": speed_factor,
+        "message": f"Processing queued with strategy {strategy}"
+    }), 202
+
+
+@api_bp.route("/adjust/<job_id>", methods=["POST"])
+def adjust_audio(job_id):
+    """
+    Adjust pitch and/or speed for an existing processed job.
+    
+    This is fast because it uses already-separated stems.
+    
+    JSON body:
+        - pitch_shift: Semitones to shift (-12 to +12)
+        - speed_factor: Speed multiplier (0.5 to 2.0)
+    
+    Returns:
+        - backing_url: URL to new adjusted backing track
+    """
+    job_dir = config.JOBS_DIR / job_id
+    if not job_dir.exists():
+        return jsonify({"error": "Job not found"}), 404
+    
+    data = request.get_json() or {}
+    pitch_shift = data.get("pitch_shift", 0)
+    speed_factor = data.get("speed_factor", 1.0)
+    
+    # Validate
+    try:
+        pitch_shift = int(pitch_shift)
+        speed_factor = float(speed_factor)
+        if not -12 <= pitch_shift <= 12:
+            return jsonify({"error": "pitch_shift must be between -12 and 12"}), 400
+        if not 0.5 <= speed_factor <= 2.0:
+            return jsonify({"error": "speed_factor must be between 0.5 and 2.0"}), 400
+    except (TypeError, ValueError):
+        return jsonify({"error": "Invalid pitch_shift or speed_factor"}), 400
+    
+    # Find source audio
+    other_wav = job_dir / "other.wav"
+    backing_wav = job_dir / "backing.wav"
+    
+    if other_wav.exists():
+        source = other_wav
+    elif backing_wav.exists():
+        source = backing_wav
+    else:
+        return jsonify({"error": "No source audio found"}), 404
+    
+    # Generate output filename
+    output_name = f"backing_p{pitch_shift:+d}_s{speed_factor:.1f}.wav"
+    output_path = job_dir / output_name
+    
+    try:
+        from services.audio_processor import process_audio
+        process_audio(source, output_path, pitch_shift, speed_factor)
+        
+        return jsonify({
+            "job_id": job_id,
+            "pitch_shift": pitch_shift,
+            "speed_factor": speed_factor,
+            "backing_url": f"/api/audio/{job_id}/{output_name}",
+            "message": "Audio adjusted successfully"
+        })
+    except Exception as e:
+        return jsonify({"error": f"Processing failed: {str(e)}"}), 500

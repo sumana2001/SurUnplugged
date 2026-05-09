@@ -53,30 +53,54 @@
                                        │
                                        ▼
 ┌──────────────────────────────────────────────────────────────────────────────┐
-│                        PROCESSING PIPELINE                                    │
+│                        PROCESSING PIPELINE (v2)                               │
 │                                                                               │
-│  ┌──────────────┐    ┌──────────────┐    ┌──────────────┐    ┌────────────┐  │
-│  │  1. DEMUCS   │ →  │ 2. CHORDINO  │ →  │ 3. MIDI GEN  │ →  │4. RENDER   │  │
-│  │              │    │              │    │              │    │            │  │
-│  │ Input:       │    │ Input:       │    │ Input:       │    │ Input:     │  │
-│  │  original.wav│    │ no_vocals.wav│    │  chords.json │    │ backing.mid│  │
-│  │              │    │              │    │              │    │            │  │
-│  │ Output:      │    │ Output:      │    │ Output:      │    │ Output:    │  │
-│  │  vocals.wav  │    │  chords.json │    │  backing.mid │    │backing.wav │  │
-│  │  no_vocals   │    │              │    │              │    │            │  │
-│  └──────────────┘    └──────────────┘    └──────────────┘    └────────────┘  │
-│         │                   │                   │                  │          │
-│         ▼                   ▼                   ▼                  ▼          │
+│  ┌────────────────────────────────────────────────────────────────────────┐  │
+│  │  STRATEGIES A/B/C: STEM-BASED (Real Instruments)                        │  │
+│  │  ════════════════════════════════════════════                           │  │
+│  │                                                                         │  │
+│  │  ┌──────────────┐    ┌──────────────┐    ┌────────────────────────┐    │  │
+│  │  │  1. DEMUCS   │ →  │ 2. STEM MIX  │ →  │ 3. PITCH/SPEED ADJUST  │    │  │
+│  │  │              │    │              │    │                        │    │  │
+│  │  │ Input:       │    │ Select stems │    │ librosa pitch_shift    │    │  │
+│  │  │  original.wav│    │ based on     │    │ librosa time_stretch   │    │  │
+│  │  │              │    │ strategy:    │    │                        │    │  │
+│  │  │ Output:      │    │  A: other    │    │ Output:                │    │  │
+│  │  │  vocals.wav  │    │  B: all      │    │  backing.wav           │    │  │
+│  │  │  drums.wav   │    │  C: other+   │    │                        │    │  │
+│  │  │  bass.wav    │    │     bass     │    │                        │    │  │
+│  │  │  other.wav   │    │              │    │                        │    │  │
+│  │  └──────────────┘    └──────────────┘    └────────────────────────┘    │  │
+│  └────────────────────────────────────────────────────────────────────────┘  │
+│                                                                               │
+│  ┌────────────────────────────────────────────────────────────────────────┐  │
+│  │  STRATEGY D: MIDI-BASED (AI Generated - Fallback)                       │  │
+│  │  ════════════════════════════════════════════════                       │  │
+│  │                                                                         │  │
+│  │  ┌──────────────┐    ┌──────────────┐    ┌──────────────┐    ┌──────┐  │  │
+│  │  │ 1. LIBROSA   │ →  │ 2. MIDI GEN  │ →  │ 3. FLUIDSYNTH│ →  │OUTPUT│  │  │
+│  │  │ Tempo/Chords │    │              │    │              │    │      │  │  │
+│  │  │              │    │ Input:       │    │ Input:       │    │ back │  │  │
+│  │  │ Output:      │    │  chords.json │    │  backing.mid │    │ .wav │  │  │
+│  │  │  chords.json │    │              │    │  guitar.sf2  │    │      │  │  │
+│  │  │  tempo (BPM) │    │ Output:      │    │              │    │      │  │  │
+│  │  │              │    │  backing.mid │    │ Output:      │    │      │  │  │
+│  │  │              │    │              │    │  backing.wav │    │      │  │  │
+│  │  └──────────────┘    └──────────────┘    └──────────────┘    └──────┘  │  │
+│  └────────────────────────────────────────────────────────────────────────┘  │
+│                                                                               │
 │  ┌────────────────────────────────────────────────────────────────────────┐  │
 │  │                         FILE STORAGE                                    │  │
 │  │  storage/jobs/{job_id}/                                                 │  │
 │  │  ├── original.wav                                                       │  │
-│  │  ├── vocals.wav                                                         │  │
-│  │  ├── no_vocals.wav                                                      │  │
-│  │  ├── chords.json                                                        │  │
-│  │  ├── backing.mid                                                        │  │
+│  │  ├── vocals.wav  ┐                                                      │  │
+│  │  ├── drums.wav   │ Strategies A/B/C                                     │  │
+│  │  ├── bass.wav    │                                                      │  │
+│  │  ├── other.wav   ┘                                                      │  │
+│  │  ├── chords.json     (Strategy D only)                                  │  │
+│  │  ├── backing.mid     (Strategy D only)                                  │  │
 │  │  ├── backing.wav         ← Main output                                  │  │
-│  │  └── backing_t{n}.wav    ← Transposed versions                          │  │
+│  │  └── backing_p{n}_s{x}.wav  ← Pitch/speed adjusted versions             │  │
 │  └────────────────────────────────────────────────────────────────────────┘  │
 │                                                                               │
 └───────────────────────────────────────────────────────────────────────────────┘

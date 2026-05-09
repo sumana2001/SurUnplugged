@@ -14,21 +14,72 @@
 | **Purpose** | Acoustic guitar backing generator with pitch control |
 | **Target User** | Amateur singers (personal use, shared free) |
 | **Tech Stack** | Flask (Python) + React (Vite) + Tailwind |
-| **Status** | � Phase 1 - Backend Foundation |
+| **Status** | 🚧 Phase 1.5 - 4-Strategy System Implemented |
 | **GitHub Repo** | https://github.com/sumana2001/SurUnplugged |
 
 ---
 
 ## 🎯 Current Phase
 
-### Phase: 1 - Backend Foundation
-**Status**: In Progress
+### Phase: 1.5 - Stem-Based Backing (Major Pivot!)
+**Status**: Testing
 
-**Next Action**: Test audio pipeline output before building frontend
+**Key Discovery**: Demucs `other.wav` sounds GREAT for acoustic songs!
+
+**4 Strategies Available:**
+| Strategy | Name | Best For |
+|----------|------|----------|
+| A | Other Only | Acoustic songs (Kabira, Tum Hi Ho) |
+| B | Instrumental | Full karaoke |
+| C | Acoustic Mix | Unplugged feel |
+| D | MIDI Generated | Fallback when stems don't work |
+
+**Next Action**: Test strategy A with Kabira/Tum Hi Ho, verify pitch shift and speed work
 
 ---
 
 ## 📝 Session Log
+
+### Session 4: May 8, 2026 - Major Pivot to Stem-Based Backing
+**Key Realization:**
+- User tested with Kabira and found `other.wav` (from Demucs) sounded GREAT!
+- The real guitar/piano from Demucs separation sounds way better than our MIDI-generated backing
+- Our chord detection + MIDI approach was over-engineered for acoustic songs
+
+**Major Changes:**
+1. **New 4-Strategy System:**
+   - **A (other_only)**: Just use Demucs `other.wav` - BEST for acoustic songs!
+   - **B (instrumental)**: Full karaoke (drums + bass + other)
+   - **C (acoustic_mix)**: Other + light bass for clean unplugged feel
+   - **D (midi_generated)**: AI-generated from chords - FALLBACK only
+
+2. **New Services Created:**
+   - `services/audio_processor.py` - Pitch shift & speed change (librosa)
+   - `services/stem_mixer.py` - Mix stems based on strategy
+
+3. **Updated Pipeline:**
+   - `test_pipeline.py` - Now supports strategies A/B/C/D with --pitch and --speed
+   - `api/routes.py` - New endpoints: /strategies, /process, /adjust
+
+**New Usage:**
+```bash
+# Strategy A - Best for acoustic songs (Kabira, Tum Hi Ho)
+python test_pipeline.py ~/Music/kabira.mp3 A
+
+# With pitch shift (lower by 2 semitones) and slow down
+python test_pipeline.py ~/Music/song.mp3 A --pitch -2 --speed 0.8
+
+# Strategy D - fallback MIDI when stems don't work
+python test_pipeline.py ~/Music/song.mp3 D
+```
+
+**Why this is better:**
+- Uses REAL instruments from the original recording
+- No artificial MIDI generation
+- Pitch shifting real audio sounds much better
+- Demucs quality is excellent for acoustic songs
+
+---
 
 ### Session 3: May 8, 2026 - First Audio Test & Critical Fix
 **What happened:**
